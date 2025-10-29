@@ -32,10 +32,11 @@ app.use(express.json());
 //app.use(cors());
 // ✅ Allow your frontend to call your backend
 app.use(cors({
-  origin: "https://course-nest-frontend-d94xlrqap-gargi-jains-projects-4e7a38ae.vercel.app",
+  origin: "https://course-nest-frontend.vercel.app",
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
+
 
 
 // Optional EJS setup
