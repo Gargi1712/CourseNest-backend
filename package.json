@@ -6,7 +6,6 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js"
-
   },
   "keywords": [],
   "author": "",
@@ -20,6 +19,7 @@
     "dotenv": "^16.5.0",
     "ejs": "^3.1.10",
     "express": "^5.1.0",
+    "firebase-admin": "^13.5.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.1"
   }

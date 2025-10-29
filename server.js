@@ -8,6 +8,13 @@ import pool from './db.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import verifyToken from './middleware/auth.js';
+import db from "./firebase.js";
+
+// ✅ Correct for Firestore
+await db.collection("status").doc("server").set({
+  server: "online",
+  time: Date.now(),
+});
 
 
 
