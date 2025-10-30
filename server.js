@@ -10,33 +10,41 @@ import { fileURLToPath } from 'url';
 import verifyToken from './middleware/auth.js';
 import db from "./firebase.js";
 
-// ✅ Correct for Firestore
+dotenv.config();
+const app = express();
+
+// ✅ For Firestore status
 await db.collection("status").doc("server").set({
   server: "online",
   time: Date.now(),
 });
 
-
-
-dotenv.config();
-const app = express();
-
 // For __dirname in ES module
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// ------------------------
 // Middleware
+// ------------------------
 app.use(express.json());
 
+// ✅ Allow both local and deployed frontend
+const allowedOrigins = [
+  "https://course-nest-frontend.vercel.app", // ✅ Production frontend
+  "http://localhost:3000"                    // ✅ Local frontend
+];
 
-//app.use(cors());
-// ✅ Allow your frontend to call your backend
 app.use(cors({
-  origin: "https://course-nest-frontend.vercel.app",
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
-
 
 
 // Optional EJS setup
@@ -47,12 +55,12 @@ app.set('views', path.join(__dirname, 'views'));
 //  Home
 // ------------------------
 app.get('/', (req, res) => {
-  res.render('index', { title: 'Welcome to Udemy Clone Backend' });
+  res.render('index', { title: 'Welcome to CourseNest Backend' });
 });
+
 // ------------------------
 // Fetch Courses
 // ------------------------
-
 app.get('/courses', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM courses');
@@ -67,7 +75,6 @@ app.get('/courses', async (req, res) => {
 // Register
 // ------------------------
 app.post('/register', async (req, res) => {
-
   const { name, email, password } = req.body;
   console.log("➡️ Register request received:", req.body);
 
@@ -75,31 +82,23 @@ app.post('/register', async (req, res) => {
     return res.status(400).json({ message: 'All fields are required' });
   }
 
-try {
-  console.log("🧪 Checking if user exists...");
-  const existingUser = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-  if (existingUser.rows.length > 0) {
-    console.log("⚠️ User already exists");
-    return res.status(400).json({ message: 'User already exists' });
+  try {
+    const existingUser = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ message: 'User already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING *',
+      [name, email, hashedPassword]
+    );
+
+    res.status(201).json({ message: 'User registered', user: result.rows[0] });
+  } catch (err) {
+    console.error("❌ DB Error:", err.message);
+    res.status(500).json({ message: 'Database error', error: err.message });
   }
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const query = 'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING *';
-  const values = [name, email, hashedPassword];
-
-  console.log("📝 Insert Query:", query);
-  console.log("📝 Values:", values);
-
-  const result = await pool.query(query, values);
-
-  console.log("✅ Inserted user:", result.rows[0]);
-  res.status(201).json({ message: 'User registered', user: result.rows[0] });
-
-} catch (err) {
-  console.error("❌ DB Error:", err.message);
-  res.status(500).json({ message: 'Database error', error: err.message });
-}
-
 });
 
 // ------------------------
@@ -131,25 +130,18 @@ app.post('/login', async (req, res) => {
     });
 
     res.json({ message: 'Login successful', token, user });
-
   } catch (err) {
     console.error("❌ Login Error:", err.message);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-
 // ------------------------
-// /payment
-// ------------------------
-
-// ------------------------
-//  PAYMENT ROUTE (PROTECTED)
+//  Payment (Protected)
 // ------------------------
 app.post('/payment', verifyToken, async (req, res) => {
-  const { courseId,paymentMethod } = req.body;
+  const { courseId, paymentMethod } = req.body;
 
-  // 🔐 Extra security: ensure user exists in request
   if (!req.user?.id) {
     return res.status(403).json({ message: 'Unauthorized' });
   }
@@ -157,7 +149,6 @@ app.post('/payment', verifyToken, async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // Check for existing payment
     const existing = await pool.query(
       'SELECT * FROM payments WHERE user_id = $1 AND course_id = $2',
       [userId, courseId]
@@ -167,7 +158,6 @@ app.post('/payment', verifyToken, async (req, res) => {
       return res.status(409).json({ message: 'You have already purchased this course.' });
     }
 
-    // Save new payment
     await pool.query(
       'INSERT INTO payments (user_id, course_id, payment_method) VALUES ($1, $2, $3)',
       [userId, courseId, paymentMethod]
@@ -175,13 +165,15 @@ app.post('/payment', verifyToken, async (req, res) => {
 
     console.log(`✅ Payment recorded for user ${userId}, course ${courseId}`);
     res.json({ message: 'Payment successful', courseId });
-
   } catch (err) {
     console.error('❌ Payment error:', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
+// ------------------------
+// My Courses (Protected)
+// ------------------------
 app.get('/my-courses', verifyToken, async (req, res) => {
   const userId = req.user.id;
 
@@ -199,7 +191,9 @@ app.get('/my-courses', verifyToken, async (req, res) => {
   }
 });
 
-// GET /course/:id/videos
+// ------------------------
+// Course Videos (Protected)
+// ------------------------
 app.get("/course/:id/videos", verifyToken, async (req, res) => {
   if (!req.user?.id) {
     return res.status(403).json({ message: "Unauthorized" }); 
@@ -208,7 +202,6 @@ app.get("/course/:id/videos", verifyToken, async (req, res) => {
   const { id } = req.params;
 
   try {
-    // ✅ Optional: Ensure the user has purchased the course
     const purchased = await pool.query(
       "SELECT 1 FROM payments WHERE user_id = $1 AND course_id = $2",
       [req.user.id, id]
@@ -224,7 +217,6 @@ app.get("/course/:id/videos", verifyToken, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 
 // ------------------------
 // 🚀 Start Server
