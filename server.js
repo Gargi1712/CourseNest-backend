@@ -30,8 +30,9 @@ app.use(express.json());
 
 // ✅ Allow both local and deployed frontend
 const allowedOrigins = [
-  "https://course-nest-frontend.vercel.app", // ✅ Production frontend
-  "http://localhost:3000"                    // ✅ Local frontend
+  "http://localhost:3000",
+  "https://course-nest-frontend.vercel.app",
+  "https://course-nest-frontend-i6mwpidfu-gargi-jains-projects-4e7a38ae.vercel.app" // ✅ new Vercel deploy URL
 ];
 
 app.use(cors({
@@ -39,12 +40,14 @@ app.use(cors({
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.log("❌ Blocked by CORS:", origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
+
 
 
 // Optional EJS setup
